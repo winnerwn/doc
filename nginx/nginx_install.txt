@@ -1,0 +1,156 @@
+Nginx简介
+
+Nginx是一款轻量级的反向代理服务器及电子邮件代理服务器,特点是内存占用少,并发高,解决了c10k问题
+
+
+Nginx工作原理
+Nginx由内核和模块组成,完成工作是通过查找配置文件将客户端请求映射到一个location, location配置的命令启动不通的模块完成工作
+
+
+Nginx的组成
+1. 核心模块: HTTP模块, EVENT模块(事件), MAIL模块
+2. 基础模块: HTTP Access模块, HTTP FastCGI模块, HTTP Proxy模块, HTTP Rewrite模块
+3. 第三方模块: HTTP Upstream Request Hash模块, Notice模块, HTTP Access Key模块
+
+
+Nginx安装
+nginx需要依赖gcc,pcre,openssl和zlib
+
+-----
+
+yum -y install gcc gcc-c++ autoconf automake
+yum -y install zlib zlib-devel openssl openssl-devel pcre-devel
+
+
+groupadd -r nginx
+useradd -g nignx -s /sbin/nologin -M nginx
+
+mkdir /package
+wget -c http://down.bscdn.cc/nginx-1.10.1.tar.gz -P /package/
+cd /package
+tar xf nginx-1.10.1.tar.gz
+cd nginx-1.10.1
+./configure --prefix=/usr/local/nginx \
+            --sbin-path=/usr/sbin/nginx
+            --conf-path=/etc/nginx/nginx.conf
+            --error-log-path=/var/log/nginx/error.log
+            --http-log-path=/var/log/nginx/access.log
+            --pid-path=/var/run/nginx/nginx.pid
+            --lock-path=/var/lock/nginx.lock
+            --user=nginx
+            --group=nginx
+            --with-http_ssl_module
+            --with-http_flv_module
+            --with-http_stub_status_module
+            --with-http_gzip_static_module
+            --http_client-body-temp-path=/var/tmp/nginx/client
+            --http-fastcgi-temp-path=/var/tmp/nginx/fcgi
+            --http-proxy-temp-path=/var/tmp/nginx/proxy
+            --with-pcre
+make && make install
+mkdir -pv /var/tmp/nginx/{client,proxy,fcgi}
+
+
+提供SysV的脚本, 实现开启自启动
+vim /etc/rc.d/init.d/nginx
+-----------------------------------------------------------------------------------
+#!/bin/sh
+#
+# nginx - this script starts and stops the nginx daemin
+#
+# chkconfig:   - 85 15
+# description:  Nginx is an HTTP(S) server, HTTP(S) reverse \
+#               proxy and IMAP/POP3 proxy server
+# processname: nginx
+# config:      /etc/nginx/nginx.conf
+# pidfile:     /var/run/nginx.pid
+# Source function library.
+. /etc/rc.d/init.d/functions
+# Source networking configuration.
+. /etc/sysconfig/network
+# Check that networking is up.
+[ "$NETWORKING" = "no" ] && exit 0
+nginx="/usr/sbin/nginx"
+prog=$(basename $nginx)
+NGINX_CONF_FILE="/etc/nginx/nginx.conf"
+lockfile=/var/lock/subsys/nginx
+start() {
+    [ -x $nginx ] || exit 5
+    [ -f $NGINX_CONF_FILE ] || exit 6
+    echo -n $"Starting $prog: "
+    daemon $nginx -c $NGINX_CONF_FILE
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && touch $lockfile
+    return $retval
+}
+stop() {
+    echo -n $"Stopping $prog: "
+    killproc $prog -QUIT
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && rm -f $lockfile
+    return $retval
+}
+restart() {
+    configtest || return $?
+    stop
+    start
+}
+reload() {
+    configtest || return $?
+    echo -n $"Reloading $prog: "
+    killproc $nginx -HUP
+    RETVAL=$?
+    echo
+}
+force_reload() {
+    restart
+}
+configtest() {
+    $nginx -t -c $NGINX_CONF_FILE
+}
+rh_status() {
+    status $prog
+}
+rh_status_q() {
+    rh_status >/dev/null 2>&1
+}
+case "$1" in
+    start)
+        rh_status_q && exit 0
+        $1
+        ;;
+    stop)
+        rh_status_q || exit 0
+        $1
+        ;;
+    restart|configtest)
+        $1
+        ;;
+    reload)
+        rh_status_q || exit 7
+        $1
+        ;;
+    force-reload)
+        force_reload
+        ;;
+    status)
+        rh_status
+        ;;
+    condrestart|try-restart)
+        rh_status_q || exit 0
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload|configtest}"
+        exit 2
+esac
+---------------------------------------------------------------------------------
+
+为SysV脚本提供执行权限并添加开启自启动
+chmod +x /etc/rc.d/init.d/nginx
+chkconfig --add nginx
+chkconfig nginx on
+
+启动nginx
+service nginx start
