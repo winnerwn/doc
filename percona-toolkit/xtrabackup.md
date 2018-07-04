@@ -38,7 +38,6 @@ wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.10/bina
 
 ### 四,备份与恢复
 
-```
 修改my.cnf以作增量备份
 ```
 [mysqld] 
